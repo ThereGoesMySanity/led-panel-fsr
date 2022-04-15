@@ -30,20 +30,19 @@ SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, kMatrixWidth, kMatrixHeig
 
 SensorState::State currentStates[kNumPanels];
 
-static void screenClearCallback(void) {
+void screenClearCallback(void) {
   backgroundLayer.fillScreen({0,0,0});
 }
-static void updateScreenCallback(void) {
+void updateScreenCallback(void) {
   backgroundLayer.swapBuffers();
 }
 
-static void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
+void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
   int16_t index = x / kPanelWidth;
-  if (currentStates[index] == SensorState::ON) {
-    int16_t xpos = kPanelPositions[index] + (kPanelFlipped[index]? kPanelWidth - x % kPanelWidth : x % kPanelWidth);
-    int16_t ypos = (kPanelFlipped[index]? kMatrixHeight - y : y);
-    backgroundLayer.drawPixel(xpos, ypos, {red, green, blue});
-  }
+  int16_t xpos = kPanelPositions[index] + (kPanelFlipped[index]? kPanelWidth - x % kPanelWidth : x % kPanelWidth);
+  int16_t ypos = (kPanelFlipped[index]? kMatrixHeight - y : y);
+  rgb24 color = {red, green, blue};
+  backgroundLayer.drawPixel(xpos, ypos, (currentStates[index] == SensorState::ON)? color : COLOR_BLACK);
 }
 
 class LedPanel {
@@ -59,13 +58,13 @@ class LedPanel {
 
       matrix.addLayer(&backgroundLayer);
       matrix.setBrightness(defaultBrightness);
-      matrix.setRefreshRate(90);
+      matrix.setRefreshRate(60);
 
       matrix.begin();
       backgroundLayer.fillScreen(COLOR_BLACK);
       backgroundLayer.swapBuffers();
 
-      Clear();
+      SetGif((uint8_t*)ldur_gif, ldur_gif_len);
     }
 
     void Update() {

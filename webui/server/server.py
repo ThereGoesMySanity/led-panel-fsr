@@ -233,15 +233,15 @@ class SerialHandler(object):
           # All commands are of the form:
           #   cmd num1 num2 num3 num4
           parts = line.split()
-          if len(parts) != num_sensors+1:
-            continue
           cmd = parts[0]
-          values = [int(x) for x in parts[1:]]
 
           if cmd == 'v':
+            values = [int(x) for x in parts[1:]]
             ProcessValues(values)
           elif cmd == 't':
+            values = [int(x) for x in parts[1:]]
             ProcessThresholds(values)
+          else: print(line)
         except queue.Full as e:
           logger.error('Could not fetch new values. Queue full.')
         except serial.SerialException as e:
