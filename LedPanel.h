@@ -30,19 +30,23 @@ SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, kMatrixWidth, kMatrixHeig
 
 SensorState::State currentStates[kNumPanels];
 
+const size_t frames = 8;
+size_t current_frame = 0;
+rgb24 framesBuffer[kMatrixWidth * kMatrixHeight * frames] DMAMEM;
+size_t frame_times[frames];
+
 void screenClearCallback(void) {
-  backgroundLayer.fillScreen({0,0,0});
+  //backgroundLayer.fillScreen({0,0,0});
 }
 void updateScreenCallback(void) {
-  backgroundLayer.swapBuffers();
+  //backgroundLayer.swapBuffers();
 }
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
   int16_t index = x / kPanelWidth;
   int16_t xpos = kPanelPositions[index] + (kPanelFlipped[index]? kPanelWidth - x % kPanelWidth : x % kPanelWidth);
   int16_t ypos = (kPanelFlipped[index]? kMatrixHeight - y : y);
-  rgb24 color = {red, green, blue};
-  backgroundLayer.drawPixel(xpos, ypos, (currentStates[index] == SensorState::ON)? color : COLOR_BLACK);
+  framesBuffer[kMatrixWidth * kMatrixHeight * current_frame + kMatrixWidth * ypos + xpos] = (rgb24){red, green, blue};
 }
 
 class LedPanel {
@@ -61,8 +65,6 @@ class LedPanel {
       matrix.setRefreshRate(60);
 
       matrix.begin();
-      backgroundLayer.fillScreen(COLOR_BLACK);
-      backgroundLayer.swapBuffers();
 
       SetGif((uint8_t*)ldur_gif, ldur_gif_len);
     }
@@ -77,8 +79,19 @@ class LedPanel {
       if (any_on) {
         unsigned long now = millis();
         if (now >= nextUpdateTime) {
-          decoder.decodeFrame(false);
-          nextUpdateTime = now + decoder.getFrameDelay_ms();
+          rgb24* dest = backgroundLayer.backBuffer();
+          backgroundLayer.fillScreen(COLOR_BLACK);
+          for (size_t i = 0; i < kNumPanels; i++) {
+            size_t pos_dst = kPanelPositions[i], pos_src = current_frame * kMatrixWidth * kMatrixHeight + pos_dst;
+            for (; pos_dst < kMatrixWidth * kMatrixHeight; pos_dst += kMatrixWidth, pos_src += kMatrixWidth) {
+              if (currentStates[i] == SensorState::ON) {
+                memcpy(&dest[pos_dst], &framesBuffer[pos_src], kPanelWidth * sizeof(rgb24));
+              }
+            }
+          }
+          backgroundLayer.swapBuffers();
+          nextUpdateTime = now + frame_times[current_frame];
+          current_frame = (current_frame + 1) % frames;
         }
       } else if (nextUpdateTime > 0) {
         Clear();
@@ -87,12 +100,17 @@ class LedPanel {
 
     void SetGif(uint8_t* _buffer, size_t len) {
       decoder.startDecoding(_buffer, len);
+      for(int i = 0; i < frames; i++) {
+        current_frame = i;
+        decoder.decodeFrame(false);
+        frame_times[i] = decoder.getFrameDelay_ms();
+      }
       Clear();
     }
 
     void Clear() {
       backgroundLayer.fillScreen(COLOR_BLACK);
-      backgroundLayer.swapBuffers();
+      backgroundLayer.swapBuffers(false);
       nextUpdateTime = 0;
     }
   private:

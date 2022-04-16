@@ -205,7 +205,7 @@ class SerialHandler(object):
         if cur != act:
           self.profile_handler.UpdateThresholds(i, act)
 
-    while not thread_stop_event.isSet():
+    while not thread_stop_event.is_set():
       if NO_SERIAL:
         offsets = [int(normalvariate(0, num_sensors+1)) for _ in range(num_sensors)]
         self.no_serial_values = [
@@ -249,7 +249,7 @@ class SerialHandler(object):
           self.Open()
 
   def Write(self):
-    while not thread_stop_event.isSet():
+    while not thread_stop_event.is_set():
       try:
         command = self.write_queue.get(timeout=1)
       except queue.Empty:
@@ -324,7 +324,7 @@ async def get_defaults(request):
 
 out_queues = set()
 out_queues_lock = threading.Lock()
-main_thread_loop = asyncio.get_event_loop()
+main_thread_loop = asyncio.new_event_loop()
 
 
 def broadcast(msg):
@@ -362,7 +362,6 @@ async def get_ws(request):
     queue_task = asyncio.create_task(queue.get())
     receive_task = asyncio.create_task(ws.receive())
     connected = True
-
     while connected:
       done, pending = await asyncio.wait([
         queue_task,
@@ -457,4 +456,4 @@ if __name__ == '__main__':
   ip_address = socket.gethostbyname(hostname)
   print(' * WebUI can be found at: http://' + ip_address + ':' + str(HTTP_PORT))
 
-  web.run_app(app, port=HTTP_PORT)
+  main_thread_loop.run_until_complete(web._run_app(app, port=HTTP_PORT))
