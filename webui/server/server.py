@@ -233,7 +233,8 @@ class SerialHandler(object):
           # All commands are of the form:
           #   cmd num1 num2 num3 num4
           parts = line.split()
-          cmd = parts[0]
+          cmd = ''
+          if len(parts) > 0: cmd = parts[0]
 
           if cmd == 'v':
             values = [int(x) for x in parts[1:]]
