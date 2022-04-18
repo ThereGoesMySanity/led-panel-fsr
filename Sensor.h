@@ -1,8 +1,8 @@
 // Class containing all relevant information per sensor.
 class Sensor {
  public:
-  Sensor(uint8_t pin_value, SensorState* sensor_state = nullptr)
-      : initialized_(false), pin_value_(pin_value),
+  Sensor(ADC* adc, uint8_t pin_value, SensorState* sensor_state = nullptr)
+      : initialized_(false), adc_(adc), pin_value_(pin_value),
         user_threshold_(kDefaultThreshold),
         #if defined(CAN_AVERAGE)
           moving_average_(kWindowSize),
@@ -25,6 +25,7 @@ class Sensor {
     if (sensor_id == 0) {
       return;
     }
+    pinMode(pin_value_, INPUT);
 
     // There is no state for this sensor, create one.
     if (sensor_state_ == nullptr) {
@@ -56,7 +57,7 @@ class Sensor {
       return;
     }
 
-    int16_t sensor_value = analogRead(pin_value_);
+    int16_t sensor_value = adc_->analogRead(pin_value_);
 
     #if defined(CAN_AVERAGE)
       // Fetch the updated Weighted Moving Average.
@@ -103,6 +104,7 @@ class Sensor {
  private:
   // Ensures that Init() has been called at exactly once on this Sensor.
   bool initialized_;
+  ADC* adc_;
   // The pin on the Teensy/Arduino corresponding to this sensor.
   uint8_t pin_value_;
 

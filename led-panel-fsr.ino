@@ -1,3 +1,4 @@
+#include <ADC.h>
 #include <inttypes.h>
 
 #if !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega328P__) && \
@@ -48,16 +49,18 @@ uint8_t curButtonNum = 1;
 #include "SensorState.h"
 #include "Sensor.h"
 
+ADC *adc = new ADC();
+
 SensorState kStates[] = { SensorState(), SensorState(), SensorState(), SensorState() };
 Sensor kSensors[] = {
-  Sensor(A0, &kStates[0]),
-  Sensor(A1, &kStates[0]),
-  Sensor(A2, &kStates[1]),
-  Sensor(A3, &kStates[1]),
-  Sensor(A4, &kStates[2]),
-  Sensor(A5, &kStates[2]),
-  Sensor(A6, &kStates[3]),
-  Sensor(A7, &kStates[3])
+  Sensor(adc, A0, &kStates[0]),
+  Sensor(adc, A1, &kStates[0]),
+  Sensor(adc, A2, &kStates[1]),
+  Sensor(adc, A3, &kStates[1]),
+  Sensor(adc, A4, &kStates[2]),
+  Sensor(adc, A5, &kStates[2]),
+  Sensor(adc, A6, &kStates[3]),
+  Sensor(adc, A7, &kStates[3])
 };
 const size_t kNumSensors = sizeof(kSensors)/sizeof(Sensor);
 
@@ -82,6 +85,9 @@ void setup() {
   }
 
   panel.Init();
+
+  adc->adc0->setAveraging(8);
+  adc->adc1->setAveraging(8);
   
   #if defined(CLEAR_BIT) && defined(SET_BIT)
 	  // Set the ADC prescaler to 16 for boards that support it,
@@ -99,6 +105,7 @@ void loop() {
   // read the analog values as fast as we can to have the most up to date
   // values for the average.
   static bool willSend;
+  static int count;
   // Separate out the initialization and the update steps for willSend.
   // Since willSend is static, we want to make sure we update the variable
   // every time we loop.
@@ -109,10 +116,14 @@ void loop() {
   for (size_t i = 0; i < kNumSensors; ++i) {
     kSensors[i].EvaluateSensor(willSend);
   }
+  count++;
 
   panel.Update();
 
   if (willSend) {
+    //Serial.println(startMicros - lastSend + loopTime);
+    //Serial.println(count);
+    count = 0;
     lastSend = startMicros;
     #ifdef CORE_TEENSY
         Joystick.send_now();
