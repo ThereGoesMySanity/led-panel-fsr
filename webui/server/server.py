@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import asyncio
+import json
 import logging
 import os
 import queue
@@ -30,7 +31,7 @@ sensor_numbers = range(num_sensors)
 
 # Used for developmental purposes. Set this to true when you just want to
 # emulate the serial device instead of actually connecting to one.
-NO_SERIAL = False
+NO_SERIAL = True
 
 
 class ProfileHandler(object):
@@ -49,7 +50,7 @@ class ProfileHandler(object):
     self.profiles = OrderedDict()
     self.cur_profile = ''
     # Have a default no-name profile we can use in case there are no profiles.
-    self.profiles[''] = [0] * num_sensors
+    self.profiles[''] = {"image": None, "thresholds": [0] * num_sensors}
     self.loaded = False
 
   def MaybeLoad(self):
@@ -58,77 +59,88 @@ class ProfileHandler(object):
       if os.path.exists(self.filename):
         with open(self.filename, 'r') as f:
           for line in f:
-            parts = line.split()
-            if len(parts) == (num_sensors+1):
-              self.profiles[parts[0]] = [int(x) for x in parts[1:]]
-              num_profiles += 1
-              # Change to the first profile found.
-              # This will also emit the thresholds.
-              if num_profiles == 1:
-                self.ChangeProfile(parts[0])
+            profile = json.loads(line)
+            self.profiles[profile["name"]] = profile["data"]
+            num_profiles += 1
+            # Change to the first profile found.
+            # This will also emit the thresholds.
+            if num_profiles == 1:
+              self.ChangeProfile(profile["data"])
       else:
         open(self.filename, 'w').close()
       self.loaded = True
       print('Found Profiles: ' + str(list(self.profiles.keys())))
 
-  def GetCurThresholds(self):
-    if self.cur_profile in self.profiles:
-      return self.profiles[self.cur_profile]
-    else:
+  def GetCurrent(self, key):
+    if self.cur_profile not in self.profiles:
       # Should never get here assuming cur_profile is always appropriately
       # updated, but you never know.
       self.ChangeProfile('')
-      return self.profiles[self.cur_profile]
+    return self.profiles[self.cur_profile][key]
+
+  def UpdateCurrentAndBroadcast(self, key, value):
+    if self.cur_profile not in self.profiles:
+      # Should never get here assuming cur_profile is always appropriately
+      # updated, but you never know.
+      self.ChangeProfile('')
+    self.profiles[self.cur_profile][key] = value
+    self.Broadcast(key)
+    self.UpdateProfiles()
+
+  def Broadcast(self, key):
+    if self.cur_profile in self.profiles:
+      broadcast([key, {key: self.GetCurrent(key)}])
+  
+  def BroadcastAll(self):
+    for key, _ in self.cur_profile:
+      self.Broadcast(key)
+
 
   def UpdateThresholds(self, index, value):
     if self.cur_profile in self.profiles:
-      self.profiles[self.cur_profile][index] = value
-      with open(self.filename, 'w') as f:
-        for name, thresholds in self.profiles.items():
-          if name:
-            f.write(name + ' ' + ' '.join(map(str, thresholds)) + '\n')
-      broadcast(['thresholds', {'thresholds': self.GetCurThresholds()}])
-      print('Thresholds are: ' + str(self.GetCurThresholds()))
+      new = self.GetCurrent("thresholds")
+      new[index] = value
+      self.UpdateCurrentAndBroadcast("thresholds", new)
+      print('Thresholds are: ' + str(self.GetCurrent("thresholds")))
+
+  def UpdateProfiles(self):
+    with open(self.filename, 'w') as f:
+      for name, data in self.profiles.items():
+        if name:
+          f.write(json.dumps({"name": name, "data": data}) + "\n")
 
   def ChangeProfile(self, profile_name):
     if profile_name in self.profiles:
       self.cur_profile = profile_name
-      broadcast(['thresholds', {'thresholds': self.GetCurThresholds()}])
+      self.BroadcastAll()
       broadcast(['get_cur_profile', {'cur_profile': self.GetCurrentProfile()}])
       print('Changed to profile "{}" with thresholds: {}'.format(
-        self.GetCurrentProfile(), str(self.GetCurThresholds())))
+        self.GetCurrentProfile(), str(self.GetCurrent("thresholds"))))
 
   def GetProfileNames(self):
     return [name for name in self.profiles.keys() if name]
 
-  def AddProfile(self, profile_name, thresholds):
-    self.profiles[profile_name] = thresholds
+  def AddProfile(self, profile_name, data):
+    self.profiles[profile_name] = data
     if self.cur_profile == '':
-      self.profiles[''] = [0] * num_sensors
+      self.profiles[''] = {"image": None, "thresholds": [0] * num_sensors}
     # ChangeProfile emits 'thresholds' and 'cur_profile'
     self.ChangeProfile(profile_name)
-    with open(self.filename, 'w') as f:
-      for name, thresholds in self.profiles.items():
-        if name:
-          f.write(name + ' ' + ' '.join(map(str, thresholds)) + '\n')
+    self.UpdateProfiles()
     broadcast(['get_profiles', {'profiles': self.GetProfileNames()}])
     print('Added profile "{}" with thresholds: {}'.format(
-      self.GetCurrentProfile(), str(self.GetCurThresholds())))
+      self.GetCurrentProfile(), str(self.GetCurrent("thresholds"))))
 
   def RemoveProfile(self, profile_name):
     if profile_name in self.profiles:
       del self.profiles[profile_name]
       if profile_name == self.cur_profile:
         self.ChangeProfile('')
-      with open(self.filename, 'w') as f:
-        for name, thresholds in self.profiles.items():
-          if name:
-            f.write(name + ' ' + ' '.join(map(str, thresholds)) + '\n')
+      self.UpdateProfiles()
       broadcast(['get_profiles', {'profiles': self.GetProfileNames()}])
-      broadcast(['thresholds', {'thresholds': self.GetCurThresholds()}])
       broadcast(['get_cur_profile', {'cur_profile': self.GetCurrentProfile()}])
       print('Removed profile "{}". Current thresholds are: {}'.format(
-        profile_name, str(self.GetCurThresholds())))
+        profile_name, str(self.GetCurrent("thresholds"))))
 
   def GetCurrentProfile(self):
     return self.cur_profile
@@ -177,7 +189,7 @@ class SerialHandler(object):
       self.ser = serial.Serial(self.port, 115200, timeout=self.timeout)
       if self.ser:
         # Apply currently loaded thresholds when the microcontroller connects.
-        for i, threshold in enumerate(self.profile_handler.GetCurThresholds()):
+        for i, threshold in enumerate(self.profile_handler.GetCurrent("thresholds")):
           threshold_cmd = '%d %d\n' % (sensor_numbers[i], threshold)
           self.write_queue.put(threshold_cmd, block=False)
     except queue.Full as e:
@@ -196,7 +208,7 @@ class SerialHandler(object):
       time.sleep(0.01)
 
     def ProcessThresholds(values):
-      cur_thresholds = self.profile_handler.GetCurThresholds()
+      cur_thresholds = self.profile_handler.GetCurrent("thresholds")
       # Fix our sensor ordering.
       actual = []
       for i in range(num_sensors):
@@ -257,10 +269,9 @@ class SerialHandler(object):
         continue
       if NO_SERIAL:
         if command[0] == 't':
-          broadcast(['thresholds',
-            {'thresholds': self.profile_handler.GetCurThresholds()}])
+          self.profile_handler.Broadcast("thresholds")
           print('Thresholds are: ' +
-            str(self.profile_handler.GetCurThresholds()))
+            str(self.profile_handler.GetCurrent("thresholds")))
         else:
           sensor, threshold = int(command[0]), int(command[1:-1])
           for i, index in enumerate(sensor_numbers):
@@ -273,12 +284,11 @@ class SerialHandler(object):
           continue
 
         try:
-          self.ser.write(command.encode())
+          self.ser.write(command.encode() if type(command) is str else command)
         except serial.SerialException as e:
           logger.error('Error writing data: ', e)
           # Emit current thresholds since we couldn't update the values.
-          broadcast(['thresholds',
-            {'thresholds': self.profile_handler.GetCurThresholds()}])
+          self.profile_handler.Broadcast("thresholds")
 
 
 profile_handler = ProfileHandler()
@@ -292,6 +302,15 @@ def update_threshold(values, index):
   except queue.Full:
     logger.error('Could not update thresholds. Queue full.')
 
+def update_image(file):
+  try:
+    fullpath = os.path.join(images_dir, file)
+    with open('images/'+file, 'rb'):
+      file_cmd = 'g %d\n' % (os.path.getsize())
+      serial_handler.write_queue.put(file_cmd, block=False)
+      serial_handler.write_queue.put(file.read(), block=True)
+  except queue.Full:
+    logger.error('Could not update image. Queue full.')
 
 def add_profile(profile_name, thresholds):
   profile_handler.AddProfile(profile_name, thresholds)
@@ -302,7 +321,7 @@ def add_profile(profile_name, thresholds):
 def remove_profile(profile_name):
   profile_handler.RemoveProfile(profile_name)
   # Need to apply the thresholds of the profile we've fallen back to.
-  thresholds = profile_handler.GetCurThresholds()
+  thresholds = profile_handler.GetCurrent("thresholds")
   for i in range(len(thresholds)):
     update_threshold(thresholds, i)
 
@@ -310,7 +329,7 @@ def remove_profile(profile_name):
 def change_profile(profile_name):
   profile_handler.ChangeProfile(profile_name)
   # Need to apply the thresholds of the profile we've changed to.
-  thresholds = profile_handler.GetCurThresholds()
+  thresholds = profile_handler.GetCurrent("thresholds")
   for i in range(len(thresholds)):
     update_threshold(thresholds, i)
 
@@ -319,9 +338,8 @@ async def get_defaults(request):
   return json_response({
     'profiles': profile_handler.GetProfileNames(),
     'cur_profile': profile_handler.GetCurrentProfile(),
-    'thresholds': profile_handler.GetCurThresholds()
+    'data': profile_handler.profiles[profile_handler.GetCurrentProfile()]
   })
-
 
 out_queues = set()
 out_queues_lock = threading.Lock()
@@ -346,10 +364,7 @@ async def get_ws(request):
 
   # The above does emit if there are differences, so have an extra for the
   # case there are no differences.
-  await ws.send_json([
-    'thresholds',
-    {'thresholds': profile_handler.GetCurThresholds()},
-  ])
+  profile_handler.BroadcastAll()
 
   # Potentially fetch any threshold values from the microcontroller that
   # may be out of sync with our profiles.
@@ -385,6 +400,9 @@ async def get_ws(request):
             if action == 'update_threshold':
               values, index = data[1:]
               update_threshold(values, index)
+            elif action == 'update_image':
+              file = data[1]
+              update_image(file)
             elif action == 'add_profile':
               profile_name, thresholds = data[1:]
               add_profile(profile_name, thresholds)
@@ -415,10 +433,15 @@ async def get_ws(request):
 build_dir = os.path.abspath(
   os.path.join(os.path.dirname(__file__), '..', 'build')
 )
-
+images_dir = os.path.abspath(
+  os.path.join(os.path.dirname(__file__), 'images')
+)
 
 async def get_index(request):
   return web.FileResponse(os.path.join(build_dir, 'index.html'))
+
+async def get_images(request):
+  return json_response([f for f in os.listdir(images_dir) if os.path.isfile(f) and os.path.splitext(f)[1] is 'gif'])
 
 async def on_startup(app):
   profile_handler.MaybeLoad()
@@ -447,7 +470,9 @@ if not NO_SERIAL:
   app.add_routes([
     web.get('/', get_index),
     web.get('/plot', get_index),
+    web.get('/image-select', get_index),
     web.static('/', build_dir),
+    web.static('/images', images_dir)
   ])
 app.on_shutdown.append(on_shutdown)
 app.on_startup.append(on_startup)

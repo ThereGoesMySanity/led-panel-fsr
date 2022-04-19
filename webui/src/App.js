@@ -131,10 +131,10 @@ function useWsConnection({ defaults, onCloseWs }) {
 
     // Ensure values history reset and default thresholds are set.
     webUIData.curValues.length = 0;
-    webUIData.curValues.push(new Array(defaults.thresholds.length).fill(0));
+    webUIData.curValues.push(new Array(defaults.data.thresholds.length).fill(0));
     webUIData.oldest = 0;
     webUIDataRef.current.curThresholds.length = 0;
-    webUIDataRef.current.curThresholds.push(...defaults.thresholds);
+    webUIDataRef.current.curThresholds.push(...defaults.data.thresholds);
 
     const ws = new WebSocket('ws://' + window.location.host + '/ws');
     wsRef.current = ws;
@@ -593,9 +593,34 @@ function Plot(props) {
   );
 }
 
+function ImageSelect(props) {
+  const { emit, webUIDataRef } = props;
+  const [data, setData] = useState(null);
+  const [selected, setSelected] = useState(null);
+  useCallback()
+  useEffect(() => {
+    fetch('/images').then(res => res.json())
+      .then(data => setData(data));
+  }, []);
+  useEffect(() => {
+    if (selected != null) {
+      emit(['update_image', selected]);
+    }
+  }, [selected]);
+  return (
+    <>
+      {selected && 
+        <image src={selected}></image>}
+      <br/>
+      {data && 
+        data.map(i => <Button onClick={() => setSelected(i)}>i</Button>)}
+    </>
+  );
+}
+
 function FSRWebUI(props) {
   const { emit, defaults, webUIDataRef, wsCallbacksRef } = props;
-  const numSensors = defaults.thresholds.length;
+  const numSensors = defaults.data.thresholds.length;
   const [profiles, setProfiles] = useState(defaults.profiles);
   const [activeProfile, setActiveProfile] = useState(defaults.cur_profile);
   useEffect(() => {
@@ -688,6 +713,9 @@ function FSRWebUI(props) {
           </Route>
           <Route path="/plot">
             <Plot numSensors={numSensors} webUIDataRef={webUIDataRef} />
+          </Route>
+          <Route path="/image-select">
+            <ImageSelect emit={emit} webUIDataRef={webUIDataRef} />
           </Route>
         </Switch>
       </Router>
