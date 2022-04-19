@@ -614,6 +614,12 @@ function ImageSelect(props) {
       <br/>
       {data && 
         data.map(i => <Button onClick={() => setSelected(i)}>i</Button>)}
+      <br/>
+      <form action="/images/upload" method="post" accept-charset="utf-8" encType='multipart/form-data'>
+        <label for='gif'>Upload gif</label>
+        <input id='gif' name='gif' type='file' value=''/>
+        <input type='submit' value='submit'/>
+      </form>
     </>
   );
 }

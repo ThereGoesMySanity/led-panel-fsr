@@ -443,6 +443,27 @@ async def get_index(request):
 async def get_images(request):
   return json_response([f for f in os.listdir(images_dir) if os.path.isfile(f) and os.path.splitext(f)[1] is 'gif'])
 
+async def upload_images(request):
+  reader = await request.multipart()
+  field = await reader.next()
+  assert field.name == 'name'
+  name = await field.read(decode=True)
+
+  field = await reader.next()
+  assert field.name == 'mp3'
+  filename = field.filename
+  size = 0
+  with open(os.path.join(images_dir, filename), 'wb') as outfile:
+    while True:
+      chunk = await field.read_chunk()  # 8192 bytes by default.
+      if not chunk:
+        break
+      size += len(chunk)
+      outfile.write(chunk)
+
+  return web.Response(text='{} sized of {} successfully stored'
+                          ''.format(filename, size))
+
 async def on_startup(app):
   profile_handler.MaybeLoad()
 
@@ -471,6 +492,7 @@ if not NO_SERIAL:
     web.get('/', get_index),
     web.get('/plot', get_index),
     web.get('/image-select', get_index),
+    web.get('/images/upload', upload_images),
     web.static('/', build_dir),
     web.static('/images', images_dir)
   ])
