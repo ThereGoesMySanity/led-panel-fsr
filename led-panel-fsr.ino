@@ -64,11 +64,11 @@ Sensor kSensors[] = {
 };
 const size_t kNumSensors = sizeof(kSensors)/sizeof(Sensor);
 
-#include "SerialProcessor.h"
 #include "LedPanel.h"
-
-SerialProcessor serialProcessor;
 LedPanel panel(kStates);
+
+#include "SerialProcessor.h"
+SerialProcessor serialProcessor;
 // Timestamps are always "unsigned long" regardless of board type So don't need
 // to explicitly worry about the widths.
 unsigned long lastSend = 0;

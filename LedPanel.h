@@ -30,10 +30,11 @@ SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, kMatrixWidth, kMatrixHeig
 
 SensorState::State currentStates[kNumPanels];
 
-const size_t frames = 8;
+const size_t maxFrames = 8;
 size_t current_frame = 0;
-rgb24 framesBuffer[kMatrixWidth * kMatrixHeight * frames] DMAMEM;
-size_t frame_times[frames];
+size_t frames = maxFrames;
+rgb24 framesBuffer[kMatrixWidth * kMatrixHeight * maxFrames] DMAMEM;
+size_t frame_times[maxFrames];
 
 void screenClearCallback(void) {
   //backgroundLayer.fillScreen({0,0,0});
@@ -99,12 +100,19 @@ class LedPanel {
     }
 
     void SetGif(uint8_t* _buffer, size_t len) {
+      uint16_t w, h;
       decoder.startDecoding(_buffer, len);
-      for(int i = 0; i < frames; i++) {
+      decoder.getSize(&w, &h);
+      if (w != kMatrixWidth || h != kMatrixHeight) {
+        Serial.println("GIF incorrect size, skipping");
+        return;
+      }
+      for(int i = 0; i < maxFrames && decoder.getCycleNumber() == 0; i++) {
         current_frame = i;
         decoder.decodeFrame(false);
         frame_times[i] = decoder.getFrameDelay_ms();
       }
+      frames = (decoder.getCycleNumber == 0)? maxFrames : decoder.getFrameCount();
       Clear();
     }
 

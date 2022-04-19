@@ -25,12 +25,32 @@ class SerialProcessor {
         case 'T':
           PrintThresholds();
           break;
+        case 'g':
+        case 'G':
+          UpdateGif(bytes_read);
+          break;
         case '0' ... '9': // Case ranges are non-standard but work in gcc
           UpdateAndPrintThreshold(bytes_read);
         default:
           break;
       }
-    }  
+    }
+  }
+
+  void UpdateGif(size_t bytes_read) {
+    if (bytes_read < 3) return;
+    size_t filesize = strtoul(buffer_ + 2, nullptr, 10);
+    if (filesize == 0) return;
+
+    char* fbuffer = (char*)malloc(filesize);
+    bytes_read = 0;
+    while (bytes_read < filesize) {
+      int result = Serial.readBytes(fbuffer + bytes_read, filesize - bytes_read);
+      if (result <= 0) return;
+      bytes_read += result;
+    }
+    panel.SetGif(fbuffer, filesize);
+    free(fbuffer);
   }
 
   void UpdateAndPrintThreshold(size_t bytes_read) {
