@@ -31,7 +31,7 @@ sensor_numbers = range(num_sensors)
 
 # Used for developmental purposes. Set this to true when you just want to
 # emulate the serial device instead of actually connecting to one.
-NO_SERIAL = True
+NO_SERIAL = False
 
 
 class ProfileHandler(object):
@@ -441,7 +441,7 @@ async def get_index(request):
   return web.FileResponse(os.path.join(build_dir, 'index.html'))
 
 async def get_images(request):
-  return json_response([f for f in os.listdir(images_dir) if os.path.isfile(f) and os.path.splitext(f)[1] is 'gif'])
+  return json_response([f for f in os.listdir(images_dir) if os.path.isfile(f) and os.path.splitext(f)[1] == 'gif'])
 
 async def upload_images(request):
   reader = await request.multipart()
