@@ -112,7 +112,7 @@ class LedPanel {
         decoder.decodeFrame(false);
         frame_times[i] = decoder.getFrameDelay_ms();
       }
-      frames = (decoder.getCycleNumber == 0)? maxFrames : decoder.getFrameCount();
+      frames = (decoder.getCycleNumber() == 0)? maxFrames : decoder.getFrameCount();
       Clear();
     }
 

@@ -86,8 +86,8 @@ void setup() {
 
   panel.Init();
 
-  adc->adc0->setAveraging(8);
-  adc->adc1->setAveraging(8);
+  adc->adc0->setAveraging(16);
+  adc->adc1->setAveraging(16);
   
   #if defined(CLEAR_BIT) && defined(SET_BIT)
 	  // Set the ADC prescaler to 16 for boards that support it,
