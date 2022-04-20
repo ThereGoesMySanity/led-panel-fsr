@@ -90,6 +90,7 @@ function useWsConnection({ defaults, onCloseWs }) {
 
     // Keep track of the current thresholds fetched from the backend.
     curThresholds: [],
+    curImage: null,
   });
 
   const wsRef = useRef();
@@ -119,6 +120,10 @@ function useWsConnection({ defaults, onCloseWs }) {
     webUIDataRef.current.curThresholds.length = 0;
     webUIDataRef.current.curThresholds.push(...msg.thresholds);
   };
+
+  wsCallbacksRef.current.image = function(msg) {
+    webUIDataRef.current.curImage = msg.image;
+  }
 
   useEffect(() => {
     let cleaningUp = false;
@@ -596,28 +601,28 @@ function Plot(props) {
 function ImageSelect(props) {
   const { emit, webUIDataRef } = props;
   const [data, setData] = useState(null);
-  const [selected, setSelected] = useState(null);
-  useCallback()
+  const [curImage, setImage] = useState(webUIDataRef.current.curImage);
   useEffect(() => {
     fetch('/images').then(res => res.json())
       .then(data => setData(data));
   }, []);
-  useEffect(() => {
-    if (selected != null) {
-      emit(['update_image', selected]);
-    }
-  }, [selected]);
+  function updateImage(img) {
+    emit(['update_image', img]);
+    setImage(img);
+  }
   return (
     <>
-      {selected && 
-        <image src={selected}></image>}
+      {curImage && 
+        <img src={"images/"+curImage} alt=""/>}
       <br/>
       {data && 
-        data.map(i => <Button onClick={() => setSelected(i)}>i</Button>)}
+        data.map(i => <Button onClick={() => updateImage(i)}><img src={"images/"+i} alt=""/></Button>)}
       <br/>
       <form action="/images/upload" method="post" accept-charset="utf-8" encType='multipart/form-data'>
         <label for='gif'>Upload gif</label>
+        <br/>
         <input id='gif' name='gif' type='file' value=''/>
+        <br/>
         <input type='submit' value='submit'/>
       </form>
     </>
@@ -648,7 +653,7 @@ function FSRWebUI(props) {
   function AddProfile(e) {
     // Only add a profile on the enter key.
     if (e.keyCode === 13) {
-      emit(['add_profile', e.target.value, webUIDataRef.current.curThresholds]);
+      emit(['add_profile', e.target.value, {"thresholds": webUIDataRef.current.curThresholds, "image": webUIDataRef.current.curImage}]);
       // Reset the text box.
       e.target.value = "";
     }
@@ -677,6 +682,9 @@ function FSRWebUI(props) {
           <Nav>
             <Nav.Item>
               <Nav.Link as={Link} to="/plot">Plot</Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link as={Link} to="/image-select">GIFs</Nav.Link>
             </Nav.Item>
           </Nav>
           <Nav className="ml-auto">

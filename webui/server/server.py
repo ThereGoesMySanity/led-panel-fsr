@@ -50,7 +50,7 @@ class ProfileHandler(object):
     self.profiles = OrderedDict()
     self.cur_profile = ''
     # Have a default no-name profile we can use in case there are no profiles.
-    self.profiles[''] = {"image": None, "thresholds": [0] * num_sensors}
+    self.profiles[''] = {"image": "default.gif", "thresholds": [1000] * num_sensors}
     self.loaded = False
 
   def MaybeLoad(self):
@@ -65,7 +65,7 @@ class ProfileHandler(object):
             # Change to the first profile found.
             # This will also emit the thresholds.
             if num_profiles == 1:
-              self.ChangeProfile(profile["data"])
+              self.ChangeProfile(profile["name"])
       else:
         open(self.filename, 'w').close()
       self.loaded = True
@@ -92,7 +92,7 @@ class ProfileHandler(object):
       broadcast([key, {key: self.GetCurrent(key)}])
   
   def BroadcastAll(self):
-    for key, _ in self.cur_profile:
+    for key, _ in self.profiles[self.cur_profile].items():
       self.Broadcast(key)
 
 
@@ -123,7 +123,7 @@ class ProfileHandler(object):
   def AddProfile(self, profile_name, data):
     self.profiles[profile_name] = data
     if self.cur_profile == '':
-      self.profiles[''] = {"image": None, "thresholds": [0] * num_sensors}
+      self.profiles[''] = {"image": None, "thresholds": [1000] * num_sensors}
     # ChangeProfile emits 'thresholds' and 'cur_profile'
     self.ChangeProfile(profile_name)
     self.UpdateProfiles()
@@ -188,10 +188,9 @@ class SerialHandler(object):
     try:
       self.ser = serial.Serial(self.port, 115200, timeout=self.timeout)
       if self.ser:
-        # Apply currently loaded thresholds when the microcontroller connects.
-        for i, threshold in enumerate(self.profile_handler.GetCurrent("thresholds")):
-          threshold_cmd = '%d %d\n' % (sensor_numbers[i], threshold)
-          self.write_queue.put(threshold_cmd, block=False)
+        # Apply currently loaded settings when the microcontroller connects.
+        update_values()
+        
     except queue.Full as e:
       logger.error('Could not set thresholds. Queue full.')
     except serial.SerialException as e:
@@ -305,33 +304,36 @@ def update_threshold(values, index):
 def update_image(file):
   try:
     fullpath = os.path.join(images_dir, file)
-    with open('images/'+file, 'rb'):
-      file_cmd = 'g %d\n' % (os.path.getsize())
-      serial_handler.write_queue.put(file_cmd, block=False)
-      serial_handler.write_queue.put(file.read(), block=True)
+    if (os.path.exists(fullpath)):
+      with open('images/'+file, 'rb') as f:
+        file_cmd = 'g %d\n' % (os.path.getsize(fullpath))
+        serial_handler.write_queue.put(file_cmd, block=False)
+        serial_handler.write_queue.put(f.read(), block=True)
+      print("Updated image")
   except queue.Full:
     logger.error('Could not update image. Queue full.')
 
-def add_profile(profile_name, thresholds):
-  profile_handler.AddProfile(profile_name, thresholds)
+def add_profile(profile_name, data):
+  profile_handler.AddProfile(profile_name, data)
   # When we add a profile, we are using the currently loaded thresholds so we
   # don't need to explicitly apply anything.
 
 
 def remove_profile(profile_name):
   profile_handler.RemoveProfile(profile_name)
-  # Need to apply the thresholds of the profile we've fallen back to.
-  thresholds = profile_handler.GetCurrent("thresholds")
-  for i in range(len(thresholds)):
-    update_threshold(thresholds, i)
+  update_values()
 
 
 def change_profile(profile_name):
   profile_handler.ChangeProfile(profile_name)
-  # Need to apply the thresholds of the profile we've changed to.
+  update_values()
+
+def update_values():
+  update_image(profile_handler.GetCurrent("image"))
   thresholds = profile_handler.GetCurrent("thresholds")
   for i in range(len(thresholds)):
     update_threshold(thresholds, i)
+
 
 
 async def get_defaults(request):
@@ -362,10 +364,6 @@ async def get_ws(request):
   request.app['websockets'].append(ws)
   print('Client connected')
 
-  # The above does emit if there are differences, so have an extra for the
-  # case there are no differences.
-  profile_handler.BroadcastAll()
-
   # Potentially fetch any threshold values from the microcontroller that
   # may be out of sync with our profiles.
   serial_handler.write_queue.put('t\n', block=False)
@@ -373,6 +371,8 @@ async def get_ws(request):
   queue = asyncio.Queue(maxsize=100)
   with out_queues_lock:
     out_queues.add(queue)
+
+  profile_handler.BroadcastAll()
 
   try:
     queue_task = asyncio.create_task(queue.get())
@@ -402,10 +402,11 @@ async def get_ws(request):
               update_threshold(values, index)
             elif action == 'update_image':
               file = data[1]
+              profile_handler.UpdateCurrentAndBroadcast("image", file)
               update_image(file)
             elif action == 'add_profile':
-              profile_name, thresholds = data[1:]
-              add_profile(profile_name, thresholds)
+              profile_name, profile_data = data[1:]
+              add_profile(profile_name, profile_data)
             elif action == 'remove_profile':
               profile_name, = data[1:]
               remove_profile(profile_name)
@@ -441,7 +442,11 @@ async def get_index(request):
   return web.FileResponse(os.path.join(build_dir, 'index.html'))
 
 async def get_images(request):
-  return json_response([f for f in os.listdir(images_dir) if os.path.isfile(f) and os.path.splitext(f)[1] == 'gif'])
+  if "tail" in request.match_info:
+    file = os.path.join(images_dir, request.match_info["tail"])
+    if os.path.exists(file) and file.endswith('.gif'):
+      return web.FileResponse(file)
+  else: return json_response([f for f in os.listdir(images_dir)])
 
 async def upload_images(request):
   reader = await request.multipart()
@@ -491,10 +496,11 @@ if not NO_SERIAL:
   app.add_routes([
     web.get('/', get_index),
     web.get('/plot', get_index),
+    web.get('/images', get_images),
+    web.get('/images/{tail:.*}', get_images),
     web.get('/image-select', get_index),
     web.get('/images/upload', upload_images),
     web.static('/', build_dir),
-    web.static('/images', images_dir)
   ])
 app.on_shutdown.append(on_shutdown)
 app.on_startup.append(on_startup)
