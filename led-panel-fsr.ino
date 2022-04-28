@@ -118,7 +118,6 @@ void loop() {
   }
   count++;
 
-  panel.Update();
 
   if (willSend) {
     //Serial.println(startMicros - lastSend + loopTime);
@@ -129,6 +128,8 @@ void loop() {
         Joystick.send_now();
     #endif
   }
+  
+  panel.Update();
 
   if (loopTime == -1) {
     loopTime = micros() - startMicros;
