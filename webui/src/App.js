@@ -621,7 +621,7 @@ function ImageSelect(props) {
       <form action="/images/upload" method="post" accept-charset="utf-8" encType='multipart/form-data'>
         <label for='gif'>Upload gif</label>
         <br/>
-        <input id='gif' name='gif' type='file' value=''/>
+        <input id='gif' name='gif' type='file' accept='image/gif' />
         <br/>
         <input type='submit' value='submit'/>
       </form>

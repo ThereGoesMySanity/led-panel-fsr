@@ -450,12 +450,9 @@ async def get_images(request):
 
 async def upload_images(request):
   reader = await request.multipart()
-  field = await reader.next()
-  assert field.name == 'name'
-  name = await field.read(decode=True)
 
   field = await reader.next()
-  assert field.name == 'mp3'
+  assert field.name == 'gif'
   filename = field.filename
   size = 0
   with open(os.path.join(images_dir, filename), 'wb') as outfile:
@@ -499,7 +496,7 @@ if not NO_SERIAL:
     web.get('/images', get_images),
     web.get('/images/{tail:.*}', get_images),
     web.get('/image-select', get_index),
-    web.get('/images/upload', upload_images),
+    web.post('/images/upload', upload_images),
     web.static('/', build_dir),
   ])
 app.on_shutdown.append(on_shutdown)
