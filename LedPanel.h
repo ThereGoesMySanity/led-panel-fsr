@@ -8,6 +8,18 @@ const uint16_t kNumPanels = 4;
 //L, D, U, R
 const uint16_t kPanelPositions[] = {128, 64, 192, 0};
 const bool kPanelFlipped[] = {false, true, false, true};
+const int8_t kPanelRotation[] = {
+  0, -1, 1, 0,
+  -1, 0, 0, -1,
+  1, 0, 0, 1,
+  0, 1, -1, 0
+};
+const uint16_t kPanelOffset[] {
+  0, 1, 0, 0,
+  1, 0, 0, 1,
+  0, 0, 0, 0,
+  0, 0, 1, 0
+}
 
 const int defaultBrightness = 255;
 const rgb24 COLOR_BLACK = {
@@ -33,6 +45,7 @@ SensorState::State currentStates[kNumPanels];
 const size_t maxFrames = 8;
 size_t current_frame = 0;
 size_t frames = maxFrames;
+int8_t tile = 1;
 rgb24 framesBuffer[kMatrixWidth * kMatrixHeight * maxFrames] DMAMEM;
 size_t frame_times[maxFrames];
 
@@ -44,10 +57,26 @@ void updateScreenCallback(void) {
 }
 
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
-  int16_t index = x / kPanelWidth;
-  int16_t xpos = kPanelPositions[index] + (kPanelFlipped[index]? kPanelWidth - x % kPanelWidth : x % kPanelWidth);
-  int16_t ypos = (kPanelFlipped[index]? kMatrixHeight - y : y);
-  framesBuffer[kMatrixWidth * kMatrixHeight * current_frame + kMatrixWidth * ypos + xpos] = (rgb24){red, green, blue};
+  if (tile <= 2) {
+    int16_t index = x / kPanelWidth;
+    int16_t xpos = kPanelPositions[index] + (kPanelFlipped[index]? kPanelWidth - x % kPanelWidth : x % kPanelWidth);
+    int16_t ypos = (kPanelFlipped[index]? kMatrixHeight - y : y);
+    framesBuffer[kMatrixWidth * kMatrixHeight * current_frame + kMatrixWidth * ypos + xpos] = (rgb24){red, green, blue};
+    if (tile == 2) {
+      int16_t xpos1 = kPanelPositions[index + 2] + (kPanelFlipped[index + 2]? x % kPanelWidth : kPanelWidth - x % kPanelWidth);
+      int16_t ypos1 = (kPanelFlipped[index + 2]? y : kMatrixHeight - y);
+      framesBuffer[kMatrixWidth * kMatrixHeight * current_frame + kMatrixWidth * ypos1 + xpos1] = (rgb24){red, green, blue};
+    }
+  }
+  else if (tile == 4) {
+    for (int i = 0; i < 4; i++) {
+      int16_t xpos = kPanelPositions[i] + x * kPanelRotation[4*i] + y * kPanelRotation[4*i + 1] 
+          + kPanelWidth * kPanelOffset[4*i] + kMatrixHeight * kPanelOffset[4*i + 1];
+      int16_t ypos = kPanelPositions[i] + x * kPanelRotation[4*i + 2] + y * kPanelRotation[4*i + 3] 
+          + kPanelWidth * kPanelOffset[4*i + 2] + kMatrixHeight * kPanelOffset[4*i + 3];
+      framesBuffer[kMatrixWidth * kMatrixHeight * current_frame + kMatrixWidth * ypos + xpos] = (rgb24){red, green, blue};
+    }
+  }
 }
 
 class LedPanel {
@@ -71,15 +100,16 @@ class LedPanel {
     }
 
     void Update() {
-      bool any_on = false;
+      bool any_on = false, any_changed = false;
       for (size_t i = 0; i < kNumPanels; i++) {
+        if (currentStates[i] != _states[i].GetCurrentState()) any_changed = true;
         currentStates[i] = _states[i].GetCurrentState();
         if (currentStates[i] == SensorState::ON) any_on = true;
       }
       
       if (any_on) {
         unsigned long now = millis();
-        if (now >= nextUpdateTime) {
+        if (now >= nextUpdateTime || any_changed) {
           rgb24* dest = backgroundLayer.backBuffer();
           backgroundLayer.fillScreen(COLOR_BLACK);
           for (size_t i = 0; i < kNumPanels; i++) {
@@ -103,7 +133,8 @@ class LedPanel {
       uint16_t w, h;
       decoder.startDecoding(_buffer, len);
       decoder.getSize(&w, &h);
-      if (w != kMatrixWidth || h != kMatrixHeight) {
+      tile = w / kPanelWidth;
+      if ((tile != 1 && tile != 2 && tile != 4) || h != kMatrixHeight) {
         Serial.println("GIF incorrect size, skipping");
         return;
       }
