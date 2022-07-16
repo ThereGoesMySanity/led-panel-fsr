@@ -9,17 +9,11 @@ const uint16_t kNumPanels = 4;
 const uint16_t kPanelPositions[] = {128, 64, 192, 0};
 const bool kPanelFlipped[] = {false, true, false, true};
 const int8_t kPanelRotation[] = {
-  0, -1, 1, 0,
-  -1, 0, 0, -1,
+  0, 1, -1, 0,
+  1, 0, 0, 1,
   1, 0, 0, 1,
   0, 1, -1, 0
 };
-const uint16_t kPanelOffset[] {
-  0, 1, 0, 0,
-  1, 0, 0, 1,
-  0, 0, 0, 0,
-  0, 0, 1, 0
-}
 
 const int defaultBrightness = 255;
 const rgb24 COLOR_BLACK = {
@@ -70,10 +64,10 @@ void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t
   }
   else if (tile == 4) {
     for (int i = 0; i < 4; i++) {
-      int16_t xpos = kPanelPositions[i] + x * kPanelRotation[4*i] + y * kPanelRotation[4*i + 1] 
-          + kPanelWidth * kPanelOffset[4*i] + kMatrixHeight * kPanelOffset[4*i + 1];
-      int16_t ypos = kPanelPositions[i] + x * kPanelRotation[4*i + 2] + y * kPanelRotation[4*i + 3] 
-          + kPanelWidth * kPanelOffset[4*i + 2] + kMatrixHeight * kPanelOffset[4*i + 3];
+      int16_t xpos = x * kPanelRotation[4*i] + y * kPanelRotation[4*i + 1];
+      xpos = kPanelPositions[i] + (xpos + kPanelWidth) % kPanelWidth;
+      int16_t ypos = x * kPanelRotation[4*i + 2] + y * kPanelRotation[4*i + 3];
+      ypos = (ypos + kMatrixHeight) % kMatrixHeight;
       framesBuffer[kMatrixWidth * kMatrixHeight * current_frame + kMatrixWidth * ypos + xpos] = (rgb24){red, green, blue};
     }
   }
@@ -133,7 +127,7 @@ class LedPanel {
       uint16_t w, h;
       decoder.startDecoding(_buffer, len);
       decoder.getSize(&w, &h);
-      tile = w / kPanelWidth;
+      tile = kMatrixWidth / w;
       if ((tile != 1 && tile != 2 && tile != 4) || h != kMatrixHeight) {
         Serial.println("GIF incorrect size, skipping");
         return;
