@@ -29,15 +29,10 @@ class Sensor {
 
     // There is no state for this sensor, create one.
     if (sensor_state_ == nullptr) {
-      sensor_state_ = new SensorState();
+      sensor_state_ = new SensorState(sensor_id);
       // If this sensor created the state, then it's in charge of deleting it.
       should_delete_state_ = true;
     }
-
-    // Initialize the sensor state.
-    // This sets the button number corresponding to the sensor state.
-    // Trying to re-initialize a sensor_state_ is a no-op, so no harm in 
-    sensor_state_->Init();
 
     // If this sensor hasn't been added to the state, then try adding it.
     if (sensor_state_->GetIndexForSensor(sensor_id) == SIZE_MAX) {

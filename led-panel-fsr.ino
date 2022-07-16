@@ -23,9 +23,6 @@ const long kBaudRate = 115200;
 // NOTE(teejusb): This is arbitrary, if you need to support more sensors
 // per panel then just change the following number.
 const size_t kMaxSharedSensors = 2;
-// Button numbers should start with 1 (Button0 is not a valid Joystick input).
-// Automatically incremented when creating a new SensorState.
-uint8_t curButtonNum = 1;
 
 // Defines the sensor collections and sets the pins for them appropriately.
 //
@@ -51,7 +48,7 @@ uint8_t curButtonNum = 1;
 
 ADC *adc = new ADC();
 
-SensorState kStates[] = { SensorState(), SensorState(), SensorState(), SensorState() };
+SensorState kStates[] = { SensorState(1), SensorState(2), SensorState(4), SensorState(3) };
 Sensor kSensors[] = {
   Sensor(adc, A0, &kStates[0]),
   Sensor(adc, A1, &kStates[0]),

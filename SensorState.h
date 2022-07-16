@@ -3,24 +3,16 @@
 // SensorState, they will all be evaluated first before triggering the event.
 class SensorState {
  public:
-  SensorState()
+  SensorState(uint8_t _buttonNum)
       : num_sensors_(0),
         #if defined(ENABLE_LIGHTS)
         kLightsPin(curLightPin++),
         #endif
-        buttonNum(curButtonNum++) {
+        buttonNum(_buttonNum) {
     for (size_t i = 0; i < kMaxSharedSensors; ++i) {
       sensor_ids_[i] = 0;
       individual_states_[i] = SensorState::OFF;
     }
-  }
-
-  void Init() {
-    if (initialized_) {
-      return;
-    }
-    buttonNum = curButtonNum++;
-    initialized_ = true;
   }
 
   // Adds a new sensor to share this state with. If we try adding a sensor that
