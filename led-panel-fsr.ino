@@ -48,7 +48,7 @@ const size_t kMaxSharedSensors = 2;
 
 ADC *adc = new ADC();
 
-SensorState kStates[] = { SensorState(1), SensorState(2), SensorState(4), SensorState(3) };
+SensorState kStates[] = { SensorState(14), SensorState(13), SensorState(12), SensorState(11) };
 Sensor kSensors[] = {
   Sensor(adc, A0, &kStates[0]),
   Sensor(adc, A1, &kStates[0]),

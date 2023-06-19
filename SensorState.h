@@ -27,9 +27,6 @@ class SensorState {
   void EvaluateSensor(uint8_t sensor_id,
                       int16_t cur_value,
                       int16_t user_threshold) {
-    if (!initialized_) {
-      return;
-    }
     size_t sensor_index = GetIndexForSensor(sensor_id);
 
     // The sensor we're evaluating is not part of this shared state.
@@ -108,8 +105,6 @@ class SensorState {
   inline State GetCurrentState() const { return combined_state_; }
 
  private:
-  // Ensures that Init() has been called at exactly once on this SensorState.
-  bool initialized_;
 
   // The collection of sensors shared with this state.
   uint8_t sensor_ids_[kMaxSharedSensors];
