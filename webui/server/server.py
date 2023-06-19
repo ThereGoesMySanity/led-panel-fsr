@@ -7,18 +7,23 @@ import queue
 import socket
 import threading
 import time
+import itertools
+import bisect
 from collections import OrderedDict
 from random import normalvariate
 
 import serial
 from aiohttp import web, WSCloseCode, WSMsgType
 from aiohttp.web import json_response
+from wand.image import Image
+from wand.color import Color
 
 logger = logging.getLogger(__name__)
 
 # Edit this to match the serial port name shown in Arduino IDE
 SERIAL_PORT = "/dev/ttyACM0"
 HTTP_PORT = 5000
+LOCAL_PROFILES_PATH = "/home/stepmania/.itgmania/Save/LocalProfiles"
 
 # Event to tell the reader and writer threads to exit.
 thread_stop_event = threading.Event()
@@ -452,19 +457,79 @@ async def upload_images(request):
   reader = await request.multipart()
 
   field = await reader.next()
-  assert field.name == 'gif'
-  filename = field.filename
-  size = 0
-  with open(os.path.join(images_dir, filename), 'wb') as outfile:
-    while True:
-      chunk = await field.read_chunk()  # 8192 bytes by default.
-      if not chunk:
-        break
-      size += len(chunk)
-      outfile.write(chunk)
+  data = await field.read()
+  with Image(blob=bytes(data)) as img:
+    if (img.format != 'gif'): 
+      img.format = 'gif'
+    img.coalesce()
+    for x in range(0, len(img.sequence)):
+      with img.sequence.index_context(x):
+        img.background_color = Color('black')
+    if (img.height != 64 or img.width / 64 not in [1, 2, 4]):
+      img.transform(resize='64x64')
+      for x in range(0, len(img.sequence)):
+        with img.sequence.index_context(x):
+          img.extent(width=64, height=64, gravity='center')
+    for x in range(0, len(img.sequence)):
+      with img.sequence.index_context(x):
+        img.background_color = Color('black')
+        img.alpha_channel = 'remove'
+    if (len(img.sequence) > 8):
+      seq_new = []
+      seq_temp = []
+      delays = [(x.index, x.delay) for x in img.sequence]
+      duration = sum(x.delay for x in img.sequence)
+      delays_acc = list(itertools.accumulate(x.delay for x in img.sequence))
+      total = 8
+      while len(seq_temp) < 8:
+        seq_temp = []
+        prev_idx = 0
+        for x in range(0, total):
+          if (prev_idx >= len(delays)): break
+          idx = bisect.bisect_left(delays_acc, duration * (x + 1) / total)
+          if (idx == prev_idx): idx = idx + 1
+          seq_temp.append(max(delays[prev_idx:idx], key=lambda x: x[1])[0])
+          prev_idx = idx
+        if (len(seq_temp) <= 8): seq_new = seq_temp
+        total = total + 1
+      x = 0
+      duration = 0
+      while x < len(img.sequence):
+        if (x not in seq_new):
+          duration = duration + img.sequence[x].delay
+          del img.sequence[x]
+          seq_new = [x - 1 for x in seq_new]
+        else:
+          if(duration > 0):
+            img.sequence[x - 1].delay = img.sequence[x - 1].delay + duration
+            duration = 0
+          x = x + 1
+      if(duration > 0):
+        img.sequence[-1].delay = img.sequence[-1].delay + duration
+    fname = field.filename
+    fname = fname[:fname.rindex('.')] + '.gif'
+    img.save(filename=os.path.join(images_dir, fname))
+    return web.Response(text='{} sized of {} successfully stored'
+                          ''.format(fname, img.size))
 
-  return web.Response(text='{} sized of {} successfully stored'
-                          ''.format(filename, size))
+async def get_local_profiles(request):
+  profiles = {}
+  for profile in os.listdir(LOCAL_PROFILES_PATH):
+    with open(os.path.join(LOCAL_PROFILES_PATH, profile, 'Editable.ini')) as f:
+      name = next(filter(lambda l: l.startswith('DisplayName='), f.readlines()))
+      name = name.removeprefix('DisplayName=').removesuffix('\n')
+      profiles[name] = profile
+  return json_response(profiles)
+
+async def get_local_profile(request):
+  basepath = os.path.join(LOCAL_PROFILES_PATH, request.match_info['profile'], 'Screenshots', 'Simply_Love')
+  screenshots = {}
+  for path in os.walk(basepath):
+    if (len(path[2]) > 0): screenshots[path[0].replace(basepath, '')] = [p for p in path[2]]
+  return json_response(screenshots)
+
+async def download_screenshot(request):
+  return web.FileResponse(os.path.join(LOCAL_PROFILES_PATH, request.match_info['profile'], 'Screenshots', 'Simply_Love', request.match_info['ss']))
 
 async def on_startup(app):
   profile_handler.MaybeLoad()
@@ -493,9 +558,13 @@ if not NO_SERIAL:
   app.add_routes([
     web.get('/', get_index),
     web.get('/plot', get_index),
+    web.get('/image-select', get_index),
+    web.get('/browse-screenshots', get_index),
     web.get('/images', get_images),
     web.get('/images/{tail:.*}', get_images),
-    web.get('/image-select', get_index),
+    web.get('/local-profiles', get_local_profiles),
+    web.get('/local-profiles/{profile:\d{8}}', get_local_profile),
+    web.get('/screenshots/{profile:\d{8}}/{ss:.*}', download_screenshot),
     web.post('/images/upload', upload_images),
     web.static('/', build_dir),
   ])

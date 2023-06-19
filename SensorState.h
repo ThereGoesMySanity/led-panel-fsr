@@ -105,7 +105,6 @@ class SensorState {
   inline State GetCurrentState() const { return combined_state_; }
 
  private:
-
   // The collection of sensors shared with this state.
   uint8_t sensor_ids_[kMaxSharedSensors];
   // The number of sensors this state combines with.
