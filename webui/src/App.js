@@ -619,12 +619,65 @@ function ImageSelect(props) {
         data.map(i => <Button onClick={() => updateImage(i)}><img src={"images/"+i} alt=""/></Button>)}
       <br/>
       <form action="/images/upload" method="post" accept-charset="utf-8" encType='multipart/form-data'>
-        <label for='gif'>Upload gif</label>
+        <label for='gif'>Upload image/gif</label>
         <br/>
-        <input id='gif' name='gif' type='file' accept='image/gif' />
+        <input id='gif' name='gif' type='file' accept='image/*' />
         <br/>
         <input type='submit' value='submit'/>
       </form>
+    </>
+  );
+}
+
+function BrowseScreenshots(props) {
+  const { activeProfile } = props;
+  const [data, setData] = useState(null);
+  const [localProfile, setLocalProfile] = useState(null);
+  useEffect(() => {
+    fetch('/local-profiles').then(res => res.json())
+      .then(profiles => {
+          if (activeProfile in profiles) {
+            setLocalProfile(profiles[activeProfile]);
+            return fetch('/local-profiles/' + profiles[activeProfile]);
+          }
+          return Promise.reject();
+        })
+      .then(res => res.json())
+      .then(data => 
+        {
+          const ordered = Object.keys(data).sort().reduce(
+            (obj, key) => {
+              obj[key] = data[key];
+              return obj;
+            }, {});
+          setData(ordered);
+        });
+  }, [activeProfile]);
+  function downloadSS(link, file) {
+    const element = document.createElement("a");
+    element.href = link;
+    element.download = file;
+    
+    document.body.appendChild(element);
+    element.click();
+  }
+  return (
+    <>
+      <br/>
+      {data && 
+        Object.keys(data).sort().reverse().slice(0, 5).map(path => 
+        <div>
+          <h1>{path}</h1>
+          {data[path].map(i => 
+            <Button onClick={() => downloadSS("/screenshots/"+localProfile+path+"/"+i, i)}>
+              <img src={"/screenshots/"+localProfile+path+"/"+i} alt="" style={{width: "min(90vw, 640px)"}}/>
+              <br/>
+              {i}
+            </Button>
+          )}
+        </div>
+      )}
+      <br/>
     </>
   );
 }
@@ -686,6 +739,9 @@ function FSRWebUI(props) {
             <Nav.Item>
               <Nav.Link as={Link} to="/image-select">GIFs</Nav.Link>
             </Nav.Item>
+            <Nav.Item>
+              <Nav.Link as={Link} to="/browse-screenshots">Screenshots</Nav.Link>
+            </Nav.Item>
           </Nav>
           <Nav className="ml-auto">
             <NavDropdown alignRight title="Profile" id="collasible-nav-dropdown">
@@ -730,6 +786,9 @@ function FSRWebUI(props) {
           </Route>
           <Route path="/image-select">
             <ImageSelect emit={emit} webUIDataRef={webUIDataRef} />
+          </Route>
+          <Route path="/browse-screenshots">
+            <BrowseScreenshots activeProfile={activeProfile} />
           </Route>
         </Switch>
       </Router>

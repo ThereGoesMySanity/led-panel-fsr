@@ -21,9 +21,9 @@ from wand.color import Color
 logger = logging.getLogger(__name__)
 
 # Edit this to match the serial port name shown in Arduino IDE
-SERIAL_PORT = ""
+SERIAL_PORT = "/dev/ttyACM0"
 HTTP_PORT = 5000
-LOCAL_PROFILES_PATH = "/run/user/1000/gvfs/sftp:host=192.168.1.166/home/stepmania/.itgmania/Save/LocalProfiles"
+LOCAL_PROFILES_PATH = "/home/stepmania/.itgmania/Save/LocalProfiles"
 
 # Event to tell the reader and writer threads to exit.
 thread_stop_event = threading.Event()
