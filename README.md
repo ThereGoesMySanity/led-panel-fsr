@@ -16,7 +16,7 @@ Follow a guide like [fsr-pad-guide](https://github.com/Sereni/fsr-pad-guide) or 
 
 Wiring diagram for LED shield + FSRs shown below:
 
-![wiring](./led-panel-fsr/blob/master/SmartLedT4V5TeensyPinout.png)
+![wiring](./SmartLedT4V5TeensyPinout.png)
 
 
 ## Firmware setup
