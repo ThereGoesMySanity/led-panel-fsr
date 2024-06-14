@@ -8,8 +8,9 @@ A complete software package for FSR dance pads - forked by ThereGoesMySanity to 
 
 
 ## Requirements
-- A [Teensy](https://www.pjrc.com/store/index.html) or Arduino
+- A [Teensy 4.1](https://www.pjrc.com/store/index.html)
   - uses native keyboard library for Arduino and Joystick library for Teensy
+  - Must be a Teensy 4.1 for the LED panels!
 
 ## Hardware setup
 Follow a guide like [fsr-pad-guide](https://github.com/Sereni/fsr-pad-guide) or [fsr](https://github.com/vlnguyen/itg-fsr/tree/master/fsr) to setup your Arduino/Teensy with FSRs.
