@@ -14,6 +14,11 @@ A complete software package for FSR dance pads - forked by ThereGoesMySanity to 
 ## Hardware setup
 Follow a guide like [fsr-pad-guide](https://github.com/Sereni/fsr-pad-guide) or [fsr](https://github.com/vlnguyen/itg-fsr/tree/master/fsr) to setup your Arduino/Teensy with FSRs.
 
+Wiring diagram for LED shield + FSRs shown below:
+
+![wiring](./led-panel-fsr/blob/master/SmartLedT4V5TeensyPinout.png)
+
+
 ## Firmware setup
 1. Install [Arduino IDE](https://www.arduino.cc/en/software) (skip this if you're using OSX as it's included in Teensyduino)
 1. Install [Teensyduino](https://www.pjrc.com/teensy/td_download.html) and get it connected to your Teensy and able to push firmware via Arduino IDE
